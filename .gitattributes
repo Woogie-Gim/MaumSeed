@@ -1,0 +1,5 @@
+# Unreal Engine 에셋 파일 LFS 트래킹
+*.uasset filter=lfs diff=lfs merge=lfs -text
+*.umap filter=lfs diff=lfs merge=lfs -text
+*.ubulk filter=lfs diff=lfs merge=lfs -text
+*.upnl filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,13 @@
+# Unreal Engine 임시 파일 및 빌드 결과물 제외
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# 에디터 및 OS 설정 파일 제외
+.idea/
+.vscode/
+.vs/
+*.sln
+*.suo
+.DS_Store
