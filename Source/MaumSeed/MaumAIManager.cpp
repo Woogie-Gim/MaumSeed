@@ -27,40 +27,27 @@ void AMaumAIManager::Tick(float DeltaTime)
 
 }
 
-// 가상의 REST API 서버로 GET 요청 전송
-void AMaumAIManager::SendTestRequest()
-{
-	FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
-	Request->OnProcessRequestComplete().BindUObject(this, &AMaumAIManager::OnTestResponseReceived);
-	Request->SetURL("https://jsonplaceholder.typicode.com/todos/1");
-	Request->SetVerb("GET");
-	Request->ProcessRequest();
-}
-
-// 서버 응답 검증 및 출력 로그 표시
-void AMaumAIManager::OnTestResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
-{
-	if (bWasSuccessful && Response.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("통신 성공! 수신된 데이터: %s"), *Response->GetContentAsString());
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("통신 실패. 인터넷 연결이나 URL을 확인하세요."));
-	}
-}
-
 // 일기 데이터 전송
 void AMaumAIManager::SendDiaryToLLM(const FString& DiaryText)
 {
+	UE_LOG(LogTemp, Warning, TEXT("제미나이 API 통신 요청 시작!"));
+
 	FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
 	Request->OnProcessRequestComplete().BindUObject(this, &AMaumAIManager::OnLLMResponseReceived);
 
-	// API 주소 및 키 할당
-	FString ApiKey = TEXT("API Key");
-	FString Endpoint = FString::Printf(TEXT("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s"), *ApiKey);
+	// 1. API 키 로드 검증
+	FString ApiKey;
+	bool bHasKey = GConfig->GetString(TEXT("MaumSeed.API"), TEXT("GeminiAPIKey"), ApiKey, GGameIni);
 
-	// HTTP 헤더 설정
+	if (!bHasKey || ApiKey.IsEmpty())
+	{
+		UE_LOG(LogTemp, Error, TEXT("DefaultGame.ini에서 API 키를 불러오지 못했습니다! ini 설정을 확인해주세요."));
+		return;
+	}
+
+	FString Endpoint = FString::Printf(TEXT("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=%s"), *ApiKey);
+	UE_LOG(LogTemp, Log, TEXT("엔드포인트 세팅 완료 (API 키 길이: %d)"), ApiKey.Len());
+
 	Request->SetURL(Endpoint);
 	Request->SetVerb("POST");
 	Request->SetHeader("Content-Type", "application/json");
@@ -69,41 +56,80 @@ void AMaumAIManager::SendDiaryToLLM(const FString& DiaryText)
 	TSharedPtr<FJsonObject> TextPart = MakeShareable(new FJsonObject());
 	TextPart->SetStringField("text", DiaryText);
 
-	// Parts 배열 구성
 	TArray<TSharedPtr<FJsonValue>> PartsArray;
 	PartsArray.Add(MakeShareable(new FJsonValueObject(TextPart)));
 
-	// Contents 객체 구성
 	TSharedPtr<FJsonObject> ContentsObj = MakeShareable(new FJsonObject());
 	ContentsObj->SetArrayField("parts", PartsArray);
 
-	// Contents 배열 구성
 	TArray<TSharedPtr<FJsonValue>> ContentsArray;
 	ContentsArray.Add(MakeShareable(new FJsonValueObject(ContentsObj)));
 
-	// 최종 JSON 객체 생성
 	TSharedPtr<FJsonObject> RequestObj = MakeShareable(new FJsonObject());
 	RequestObj->SetArrayField("contents", ContentsArray);
 
-	// 문자열 직렬화
+	// JSON 직렬화 검증
 	FString JsonString;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
-	FJsonSerializer::Serialize(RequestObj.ToSharedRef(), Writer);
 
-	// 페이로드 탑재 및 전송
+	if (FJsonSerializer::Serialize(RequestObj.ToSharedRef(), Writer))
+	{
+		UE_LOG(LogTemp, Log, TEXT("JSON 직렬화 성공: %s"), *JsonString);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("JSON 직렬화에 실패했습니다!"));
+		return;
+	}
+
 	Request->SetContentAsString(JsonString);
-	Request->ProcessRequest();
+
+	// HTTP 전송 시작 검증
+	bool bRequestSent = Request->ProcessRequest();
+	if (bRequestSent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HTTP 요청 전송 성공! 응답을 대기합니다..."));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("HTTP 요청 전송 자체에 실패했습니다!"));
+	}
 }
 
 // LLM 서버 응답 수신 및 처리
 void AMaumAIManager::OnLLMResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	if (bWasSuccessful && Response.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("LLM 응답 성공: %s"), *Response->GetContentAsString());
-	}
-	else
+	// 통신 유효성 검증
+	if (!bWasSuccessful || !Response.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("LLM 통신 실패"));
+		return;
+	}
+
+	// 수신된 원본 데이터 추출
+	FString ResponseString = Response->GetContentAsString();
+
+	// 파싱 전 서버 원본 응답 상태 강제 출력
+	UE_LOG(LogTemp, Warning, TEXT("서버 원본 응답: %s"), *ResponseString);
+
+	// JSON 역직렬화 객체 생성
+	TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(ResponseString);
+	TSharedPtr<FJsonObject> JsonObject;
+
+	if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+	{
+		// 응답 텍스트 추출 (정상 응답 시)
+		const TArray<TSharedPtr<FJsonValue>>* CandidatesArray;
+		if (JsonObject->TryGetArrayField(TEXT("candidates"), CandidatesArray) && CandidatesArray->Num() > 0)
+		{
+			TSharedPtr<FJsonObject> ContentObject = (*CandidatesArray)[0]->AsObject()->GetObjectField(TEXT("content"));
+			const TArray<TSharedPtr<FJsonValue>>* PartsArray;
+
+			if (ContentObject->TryGetArrayField(TEXT("parts"), PartsArray) && PartsArray->Num() > 0)
+			{
+				FString ResultText = (*PartsArray)[0]->AsObject()->GetStringField(TEXT("text"));
+				UE_LOG(LogTemp, Log, TEXT("추출된 AI 응답: %s"), *ResultText);
+			}
+		}
 	}
 }

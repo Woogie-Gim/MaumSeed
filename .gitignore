@@ -11,3 +11,6 @@ Saved/
 *.sln
 *.suo
 .DS_Store
+
+# API Key
+Config/DefaultGame.ini

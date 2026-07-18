@@ -15,10 +15,6 @@ public:
 	// Sets default values for this actor's properties
 	AMaumAIManager();
 
-	// 테스트 HTTP 요청 전송
-	UFUNCTION(BlueprintCallable, Category = "AI")
-	void SendTestRequest();
-
 	// 사용자 일기 데이터 LLM 서버 전송
 	UFUNCTION(BlueprintCallable, Category = "AI")
 	void SendDiaryToLLM(const FString& DiaryText);
@@ -32,9 +28,6 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 private:
-	// HTTP 응답 수신 콜백
-	void OnTestResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
-
 	// LLM 서버 응답 수신 및 처리
 	void OnLLMResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 };
