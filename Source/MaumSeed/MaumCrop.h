@@ -25,6 +25,9 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	// 데이터테이블에서 할당받은 작물 정보 포인터
+	FMaumCropData* CropData;
+
 	// 축복치 수신 델리게이트 바인딩 함수
 	UFUNCTION()
 	void OnBlessingReceivedHandler(int32 BlessingValue);
@@ -43,5 +46,16 @@ public:
 
 	// 현재 누적된 작물 성장치
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
-	int32 CurrentGrowth;
+	int32 CurrentGrowth = 0;
+
+	// 현재 작물의 성장 단계 (일차)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
+	int32 CurrentStage = 0;
+
+	// 축복치 수신 및 누적 연산
+	UFUNCTION()
+	void UpdateCropGrowth(int32 BlessingValue);
+
+	// 성장 단계 상승 및 상태 업데이트
+	void AdvanceToNextStage();
 };
