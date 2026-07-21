@@ -58,4 +58,16 @@ public:
 
 	// 성장 단계 상승 및 상태 업데이트
 	void AdvanceToNextStage();
+
+	// 현재 작물 상태 저장
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	void SaveCropState();
+
+	// 저장된 작물 상태 로드
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	void LoadCropState();
+
+	// 디버깅용 하루 치 성장 강제 적용
+	UFUNCTION(BlueprintCallable, Category = "Cheat")
+	void CheatTimeSkip();
 };

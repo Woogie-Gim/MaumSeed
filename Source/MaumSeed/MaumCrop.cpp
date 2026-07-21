@@ -1,6 +1,7 @@
 ﻿#include "MaumCrop.h"
 #include "Kismet/GameplayStatics.h"
 #include "MaumAIManager.h"
+#include "MaumSaveGame.h"
 
 AMaumCrop::AMaumCrop()
 {
@@ -90,4 +91,47 @@ void AMaumCrop::AdvanceToNextStage()
 	{
 		UE_LOG(LogTemp, Log, TEXT("[%s] 작물이 %d 단계로 성장했습니다!"), *CropData->Name, CurrentStage);
 	}
+}
+
+void AMaumCrop::SaveCropState()
+{
+	// 세이브 게임 인스턴스 생성
+	UMaumSaveGame* SaveGameInst = Cast<UMaumSaveGame>(UGameplayStatics::CreateSaveGameObject(UMaumSaveGame::StaticClass()));
+	if (!SaveGameInst) return;
+
+	// 현재 데이터 복사
+	SaveGameInst->SavedCropID = CurrentCropID;
+	SaveGameInst->SavedGrowth = CurrentGrowth;
+	SaveGameInst->SavedStage = CurrentStage;
+
+	// 지정된 슬롯에 데이터 저장
+	UGameplayStatics::SaveGameToSlot(SaveGameInst, TEXT("CropSaveSlot"), 0);
+	UE_LOG(LogTemp, Log, TEXT("작물 상태가 성공적으로 저장되었습니다."));
+}
+
+void AMaumCrop::LoadCropState()
+{
+	// 세이브 슬롯 존재 여부 확인
+	if (UGameplayStatics::DoesSaveGameExist(TEXT("CropSaveSlot"), 0))
+	{
+		// 슬롯에서 데이터 로드
+		UMaumSaveGame* LoadGameInst = Cast<UMaumSaveGame>(UGameplayStatics::LoadGameFromSlot(TEXT("CropSaveSlot"), 0));
+		if (LoadGameInst)
+		{
+			// 로드된 데이터 적용
+			CurrentCropID = LoadGameInst->SavedCropID;
+			CurrentGrowth = LoadGameInst->SavedGrowth;
+			CurrentStage = LoadGameInst->SavedStage;
+
+			UE_LOG(LogTemp, Log, TEXT("작물 상태를 불러왔습니다. (단계: %d, 누적 성장치: %d)"), CurrentStage, CurrentGrowth);
+		}
+	}
+}
+
+void AMaumCrop::CheatTimeSkip()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Cheat] 타임 스킵 발동! 하루 치 성장을 강제로 진행합니다."));
+
+	// 어제 작성한 성장 연산 함수 재사용 (하루 요구치인 100 부여)
+	UpdateCropGrowth(100);
 }
