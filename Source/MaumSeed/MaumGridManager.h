@@ -1,43 +1,52 @@
-
-
-#pragma once
+ï»¿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MaumGridManager.generated.h"
 
 class AMaumTile;
+class UDataTable;
 
 UCLASS()
 class MAUMSEED_API AMaumGridManager : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
-	// Sets default values for this actor's properties
+
+	public:
 	AMaumGridManager();
 
+	// ìƒì„±ëœ íƒ€ì¼ ëª©ë¡ ë°˜í™˜ (DayManagerê°€ í˜¸ì¶œ)
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	TArray<AMaumTile*> GetTiles() const;
+
+	// ì¸ë±ìŠ¤ë¡œ íƒ€ì¼ ì¡°íšŒ (ì„¸ì´ë¸Œ/ë¡œë“œìš©)
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	AMaumTile* GetTileByIndex(int32 Index) const;
+
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	// ½ºÆùÇÒ Å¸ÀÏ Å¬·¡½º ÁöÁ¤
+	// ê·¸ë¦¬ë“œ ìƒì„±
+	void GenerateGrid();
+
+	// ìŠ¤í°í•  íƒ€ì¼ í´ë˜ìŠ¤
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	TSubclassOf<AMaumTile> TileClass;
 
-	// ¹ç °¡·Î¼¼·Î °³¼ö
+	// íƒ€ì¼ì— ê³µí†µ ì ìš©í•  ë°ì´í„°í…Œì´ë¸”
+	UPROPERTY(EditAnywhere, Category = "Grid")
+	TObjectPtr<UDataTable> CropDataTable;
+
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	int32 GridSizeX = 4;
 
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	int32 GridSizeY = 4;
 
-	// Å¸ÀÏ °£°İ
 	UPROPERTY(EditAnywhere, Category = "Grid")
 	float TileSpacing = 150.0f;
 
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
+	// ìƒì„±ëœ íƒ€ì¼ ë³´ê´€
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid")
+	TArray<TObjectPtr<AMaumTile>> SpawnedTiles;
 };

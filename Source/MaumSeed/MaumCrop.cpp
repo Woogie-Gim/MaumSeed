@@ -1,7 +1,4 @@
 ﻿#include "MaumCrop.h"
-#include "Kismet/GameplayStatics.h"
-#include "MaumAIManager.h"
-#include "MaumSaveGame.h"
 
 AMaumCrop::AMaumCrop()
 {
@@ -9,71 +6,122 @@ AMaumCrop::AMaumCrop()
 
 	CropMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CropMesh"));
 	RootComponent = CropMesh;
-
-	CurrentGrowth = 0;
-	CurrentStage = 0;
-	CropData = nullptr;
 }
 
 void AMaumCrop::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 데이터테이블과 고유 ID를 이용해 작물 데이터 캐싱
-	if (CropDataTable && !CurrentCropID.IsNone())
+	// 에디터에서 미리 배치한 경우 대비
+	if (!bCropDataValid && CropDataTable && !CurrentCropID.IsNone())
 	{
-		CropData = CropDataTable->FindRow<FMaumCropData>(CurrentCropID, TEXT("CropDataCache"));
-	}
-
-	if (!CropData)
-	{
-		UE_LOG(LogTemp, Error, TEXT("AMaumCrop: 작물 데이터를 불러오지 못했습니다. DataTable과 CurrentCropID를 확인하세요."));
-	}
-
-	// 레벨 내 AI 매니저 검색 및 델리게이트 바인딩
-	AActor* ManagerActor = UGameplayStatics::GetActorOfClass(GetWorld(), AMaumAIManager::StaticClass());
-
-	if (AMaumAIManager* AIManager = Cast<AMaumAIManager>(ManagerActor))
-	{
-		AIManager->OnBlessingReceived.AddDynamic(this, &AMaumCrop::OnBlessingReceivedHandler);
+		InitCrop(CurrentCropID, CropDataTable);
 	}
 }
 
-void AMaumCrop::Tick(float DeltaTime)
+void AMaumCrop::InitCrop(FName NewCropID, UDataTable* InDataTable)
 {
-	Super::Tick(DeltaTime);
-}
-
-void AMaumCrop::OnBlessingReceivedHandler(int32 BlessingValue)
-{
-	// 델리게이트 수신 시 성장 판정 함수 호출
-	UpdateCropGrowth(BlessingValue);
-}
-
-void AMaumCrop::UpdateCropGrowth(int32 BlessingValue)
-{
-	if (CropData == nullptr)
+	if (!InDataTable || NewCropID.IsNone())
 	{
-		UE_LOG(LogTemp, Error, TEXT("CropData가 유효하지 않습니다."));
+		UE_LOG(LogTemp, Error, TEXT("InitCrop: 데이터테이블 또는 작물 ID가 유효하지 않습니다."));
 		return;
 	}
 
-	// 이미 완숙 상태인 경우 추가 성장 방지
-	if (CurrentStage >= CropData->GrowthDays)
+	CropDataTable = InDataTable;
+	CurrentCropID = NewCropID;
+
+	// 값으로 복사 (댕글링 포인터 방지)
+	if (const FMaumCropData* Row = InDataTable->FindRow<FMaumCropData>(NewCropID, TEXT("InitCrop")))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[%s] 이미 완숙된 상태입니다."), *CropData->Name);
+		CachedCropData = *Row;
+		bCropDataValid = true;
+
+		CurrentGrowth = 0;
+		CurrentStage = 0;
+		WateredToday = 0;
+		bFertilizedToday = false;
+
+		UpdateStageMesh();
+
+		UE_LOG(LogTemp, Log, TEXT("[%s] 작물을 심었습니다."), *CachedCropData.Name);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("InitCrop: '%s' 행을 찾을 수 없습니다."), *NewCropID.ToString());
+		bCropDataValid = false;
+	}
+}
+
+void AMaumCrop::WaterCrop()
+{
+	if (!bCropDataValid || IsHarvestable()) return;
+
+	WateredToday++;
+	UE_LOG(LogTemp, Log, TEXT("[%s] 물주기 (%d/%d회)"),
+		*CachedCropData.Name, WateredToday, CachedCropData.WaterPerDay);
+}
+
+void AMaumCrop::ApplyFertilizer()
+{
+	if (!bCropDataValid || IsHarvestable() || bFertilizedToday) return;
+
+	bFertilizedToday = true;
+	UE_LOG(LogTemp, Log, TEXT("[%s] 비료를 주었습니다."), *CachedCropData.Name);
+}
+
+void AMaumCrop::ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeather)
+{
+	if (!bCropDataValid)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ProcessDailyGrowth: 작물 데이터가 유효하지 않습니다."));
 		return;
 	}
 
-	// 축복치 누적
-	CurrentGrowth += BlessingValue;
-	UE_LOG(LogTemp, Warning, TEXT("[%s] 축복치 %d 수신! (현재 누적 성장치: %d)"), *CropData->Name, BlessingValue, CurrentGrowth);
+	if (IsHarvestable())
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[%s] 이미 수확 가능 상태입니다."), *CachedCropData.Name);
+		return;
+	}
 
-	// 다음 단계로 넘어가기 위한 요구치 (1일차=100, 2일차=200...)
-	int32 NextStageRequirement = (CurrentStage + 1) * 100;
+	// 성장 판정식
+	// 기준치 100에서 시작
+	int32 Growth = 100;
 
-	// 요구치 도달 시 성장 단계 상승 처리
-	if (CurrentGrowth >= NextStageRequirement)
+	// 물주기 일치도: 부족/과다 모두 감점 (회당 25점)
+	const int32 WaterDiff = FMath::Abs(WateredToday - CachedCropData.WaterPerDay);
+	const int32 WaterPenalty = WaterDiff * 25;
+	Growth -= WaterPenalty;
+
+	// 날씨 일치 보너스
+	int32 WeatherBonus = 0;
+	if (TodayWeather == CachedCropData.PreferredWeather)
+	{
+		WeatherBonus = 20;
+		Growth += WeatherBonus;
+	}
+
+	// 비료 보너스
+	int32 FertBonus = 0;
+	if (bFertilizedToday)
+	{
+		FertBonus = CachedCropData.FertilizerBonus;
+		Growth += FertBonus;
+	}
+
+	// AI 축복치: 0~100 → -10~+10 (전체 영향력 약 10% 유지)
+	const int32 BlessingBonus = FMath::Clamp((BlessingValue - 50) / 5, -10, 10);
+	Growth += BlessingBonus;
+
+	// 음수 방지
+	Growth = FMath::Max(Growth, 0);
+	CurrentGrowth += Growth;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[%s] 일일 성장 +%d (물 -%d / 날씨 +%d / 비료 +%d / 축복 %+d) | 누적: %d"),
+		*CachedCropData.Name, Growth, WaterPenalty, WeatherBonus, FertBonus, BlessingBonus, CurrentGrowth);
+
+	// 단계 상승 판정 (누적치가 충분하면 여러 단계 동시 상승)
+	while (!IsHarvestable() && CurrentGrowth >= (CurrentStage + 1) * 100)
 	{
 		AdvanceToNextStage();
 	}
@@ -82,56 +130,86 @@ void AMaumCrop::UpdateCropGrowth(int32 BlessingValue)
 void AMaumCrop::AdvanceToNextStage()
 {
 	CurrentStage++;
+	UpdateStageMesh();
 
-	if (CropData && CurrentStage >= CropData->GrowthDays)
+	if (IsHarvestable())
 	{
-		UE_LOG(LogTemp, Log, TEXT("[%s] 작물이 완전히 자랐습니다! 수확 가능 상태로 전환됩니다."), *CropData->Name);
+		UE_LOG(LogTemp, Log, TEXT("[%s] 다 자랐습니다! 수확할 수 있어요."), *CachedCropData.Name);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Log, TEXT("[%s] 작물이 %d 단계로 성장했습니다!"), *CropData->Name, CurrentStage);
+		UE_LOG(LogTemp, Log, TEXT("[%s] %d단계로 성장했습니다."), *CachedCropData.Name, CurrentStage);
 	}
 }
 
-void AMaumCrop::SaveCropState()
+void AMaumCrop::UpdateStageMesh()
 {
-	// 세이브 게임 인스턴스 생성
-	UMaumSaveGame* SaveGameInst = Cast<UMaumSaveGame>(UGameplayStatics::CreateSaveGameObject(UMaumSaveGame::StaticClass()));
-	if (!SaveGameInst) return;
+	if (StageMeshes.Num() == 0 || !CropMesh) return;
 
-	// 현재 데이터 복사
-	SaveGameInst->SavedCropID = CurrentCropID;
-	SaveGameInst->SavedGrowth = CurrentGrowth;
-	SaveGameInst->SavedStage = CurrentStage;
+	const int32 MeshIndex = FMath::Clamp(CurrentStage, 0, StageMeshes.Num() - 1);
 
-	// 지정된 슬롯에 데이터 저장
-	UGameplayStatics::SaveGameToSlot(SaveGameInst, TEXT("CropSaveSlot"), 0);
-	UE_LOG(LogTemp, Log, TEXT("작물 상태가 성공적으로 저장되었습니다."));
-}
-
-void AMaumCrop::LoadCropState()
-{
-	// 세이브 슬롯 존재 여부 확인
-	if (UGameplayStatics::DoesSaveGameExist(TEXT("CropSaveSlot"), 0))
+	if (StageMeshes[MeshIndex])
 	{
-		// 슬롯에서 데이터 로드
-		UMaumSaveGame* LoadGameInst = Cast<UMaumSaveGame>(UGameplayStatics::LoadGameFromSlot(TEXT("CropSaveSlot"), 0));
-		if (LoadGameInst)
-		{
-			// 로드된 데이터 적용
-			CurrentCropID = LoadGameInst->SavedCropID;
-			CurrentGrowth = LoadGameInst->SavedGrowth;
-			CurrentStage = LoadGameInst->SavedStage;
+		CropMesh->SetStaticMesh(StageMeshes[MeshIndex]);
+		CropMesh->MarkRenderStateDirty();   // 렌더 상태 강제 갱신
 
-			UE_LOG(LogTemp, Log, TEXT("작물 상태를 불러왔습니다. (단계: %d, 누적 성장치: %d)"), CurrentStage, CurrentGrowth);
-		}
+		UE_LOG(LogTemp, Log, TEXT("[%s] 메시 교체: 인덱스 %d"), *CachedCropData.Name, MeshIndex);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("StageMeshes[%d]가 비어 있습니다."), MeshIndex);
 	}
 }
 
-void AMaumCrop::CheatTimeSkip()
+bool AMaumCrop::IsHarvestable() const
 {
-	UE_LOG(LogTemp, Warning, TEXT("[Cheat] 타임 스킵 발동! 하루 치 성장을 강제로 진행합니다."));
+	return bCropDataValid && CurrentStage >= CachedCropData.GrowthDays;
+}
 
-	// 어제 작성한 성장 연산 함수 재사용 (하루 요구치인 100 부여)
-	UpdateCropGrowth(100);
+int32 AMaumCrop::HarvestCrop()
+{
+	if (!IsHarvestable()) return 0;
+
+	// 품질 보정: 누적 성장치가 기준을 넘을수록 가산점
+	const int32 IdealGrowth = CachedCropData.GrowthDays * 100;
+	const float QualityRatio = (IdealGrowth > 0)
+		? static_cast<float>(CurrentGrowth) / static_cast<float>(IdealGrowth)
+		: 1.0f;
+
+	const int32 FinalScore = FMath::RoundToInt(CachedCropData.BaseScore * FMath::Clamp(QualityRatio, 0.5f, 1.5f));
+
+	UE_LOG(LogTemp, Warning, TEXT("[%s] 수확 완료! 획득 점수: %d (품질 배율 %.2f)"),
+		*CachedCropData.Name, FinalScore, QualityRatio);
+
+	// 상태 초기화
+	bCropDataValid = false;
+	CurrentCropID = NAME_None;
+	CurrentGrowth = 0;
+	CurrentStage = 0;
+	WateredToday = 0;
+	bFertilizedToday = false;
+
+	if (CropMesh)
+	{
+		CropMesh->SetStaticMesh(nullptr);
+	}
+
+	return FinalScore;
+}
+
+void AMaumCrop::ResetDailyState()
+{
+	WateredToday = 0;
+	bFertilizedToday = false;
+}
+
+void AMaumCrop::ApplySaveData(FName InCropID, int32 InGrowth, int32 InStage, UDataTable* InDataTable)
+{
+	if (InCropID.IsNone() || !InDataTable) return;
+
+	InitCrop(InCropID, InDataTable);
+
+	CurrentGrowth = InGrowth;
+	CurrentStage = InStage;
+	UpdateStageMesh();
 }

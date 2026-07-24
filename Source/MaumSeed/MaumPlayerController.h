@@ -16,4 +16,7 @@ class MAUMSEED_API AMaumPlayerController : public APlayerController
 	
 protected:
 	virtual void BeginPlay() override;
+
+public:
+	AMaumPlayerController();
 };

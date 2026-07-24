@@ -1,42 +1,107 @@
-﻿
-#include "MaumTile.h"
+﻿#include "MaumTile.h"
+#include "MaumCrop.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
-// Sets default values
 AMaumTile::AMaumTile()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 
-	// 메시 컴포넌트 생성 및 루트 설정
 	TileMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TileMesh"));
 	RootComponent = TileMesh;
 
-	// 레이캐스트 충돌용 콜리전 설정
 	TileMesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
-
 }
 
-// Called when the game starts or when spawned
 void AMaumTile::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	// 터치 이벤트 델리게이트 바인딩
+
 	OnInputTouchBegin.AddDynamic(this, &AMaumTile::OnTileTouched);
-}
-
-// Called every frame
-void AMaumTile::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
 }
 
 void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor)
 {
-	// 터치 확인용 에디터 로그 출력
-	UE_LOG(LogTemp, Warning, TEXT("타일 터치 인식 완료: %s"), *GetName());
+	PlayTouchFeedback();
+	InteractWithTile();
+}
 
-	// 상호작용 피드백용 타일 스케일 축소
-	SetActorScale3D(FVector(0.9f, 0.9f, 0.9f));
+void AMaumTile::InteractWithTile()
+{
+	switch (InteractMode)
+	{
+	case EMaumInteractMode::Plant:
+		if (IsEmpty())
+		{
+			PlantCrop(SelectedCropID, CropDataTable);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("타일 %d: 이미 작물이 심어져 있습니다."), TileIndex);
+		}
+		break;
+
+	case EMaumInteractMode::Water:
+		if (PlantedCrop)
+		{
+			PlantedCrop->WaterCrop();
+		}
+		break;
+
+	case EMaumInteractMode::Fertilize:
+		if (PlantedCrop)
+		{
+			PlantedCrop->ApplyFertilizer();
+		}
+		break;
+
+	case EMaumInteractMode::Harvest:
+		if (PlantedCrop && PlantedCrop->IsHarvestable())
+		{
+			const int32 Score = PlantedCrop->HarvestCrop();
+			OnCropHarvested.Broadcast(Score);
+
+			PlantedCrop->Destroy();
+			PlantedCrop = nullptr;
+		}
+		break;
+	}
+}
+
+bool AMaumTile::PlantCrop(FName CropID, UDataTable* InDataTable)
+{
+	if (!IsEmpty() || CropID.IsNone() || !InDataTable || !CropActorClass)
+	{
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World) return false;
+
+	// 타일 위에 작물 스폰
+	const FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, 10.f);
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+
+	AMaumCrop* NewCrop = World->SpawnActor<AMaumCrop>(CropActorClass, SpawnLocation, FRotator::ZeroRotator, Params);
+	if (!NewCrop) return false;
+
+	NewCrop->InitCrop(CropID, InDataTable);
+	PlantedCrop = NewCrop;
+
+	return true;
+}
+
+void AMaumTile::PlayTouchFeedback()
+{
+	SetActorScale3D(FVector(0.9f));
+
+	// 0.15초 후 원래 크기로 복구
+	GetWorldTimerManager().SetTimer(
+		ScaleRestoreTimer, this, &AMaumTile::RestoreTileScale, 0.15f, false);
+}
+
+void AMaumTile::RestoreTileScale()
+{
+	SetActorScale3D(FVector(1.0f));
 }

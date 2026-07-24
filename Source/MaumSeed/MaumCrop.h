@@ -1,73 +1,106 @@
-﻿
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Engine/DataTable.h"
-#include "MaumCropData.h" // 데이터 구조체 헤더 포함
+#include "MaumCropData.h"
 #include "MaumCrop.generated.h"
 
 UCLASS()
 class MAUMSEED_API AMaumCrop : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
-	// Sets default values for this actor's properties
+
+	public:
 	AMaumCrop();
 
+	// 작물 데이터 초기화 (심을 때 호출)
+	UFUNCTION(BlueprintCallable, Category = "Crop")
+	void InitCrop(FName NewCropID, UDataTable* InDataTable);
+
+	// 하루 치 성장 판정 (DayManager가 호출)
+	UFUNCTION(BlueprintCallable, Category = "Crop")
+	void ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeather);
+
+	// 물주기
+	UFUNCTION(BlueprintCallable, Category = "Crop")
+	void WaterCrop();
+
+	// 비료 주기
+	UFUNCTION(BlueprintCallable, Category = "Crop")
+	void ApplyFertilizer();
+
+	// 수확 (획득 점수 반환, 실패 시 0)
+	UFUNCTION(BlueprintCallable, Category = "Crop")
+	int32 HarvestCrop();
+
+	// 하루 종료 시 일일 상태 초기화
+	void ResetDailyState();
+
+	// 상태 조회
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	bool IsHarvestable() const;
+
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	int32 GetCurrentStage() const { return CurrentStage; }
+
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	int32 GetCurrentGrowth() const { return CurrentGrowth; }
+
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	FName GetCropID() const { return CurrentCropID; }
+
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	bool IsDataValid() const { return bCropDataValid; }
+
+	// 세이브/로드용
+	void ApplySaveData(FName InCropID, int32 InGrowth, int32 InStage, UDataTable* InDataTable);
+
+	// 작물 3D 모델
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> CropMesh;
+
+	// 성장 단계별 메시 (씨앗/새싹/성장/개화)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visual")
+	TArray<TObjectPtr<UStaticMesh>> StageMeshes;
+
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	// 성장 단계 상승 처리
+	void AdvanceToNextStage();
 
-	// 데이터테이블에서 할당받은 작물 정보 포인터
-	FMaumCropData* CropData;
+	// 현재 단계에 맞는 메시로 교체
+	void UpdateStageMesh();
 
-	// 축복치 수신 델리게이트 바인딩 함수
-	UFUNCTION()
-	void OnBlessingReceivedHandler(int32 BlessingValue);
-
-	// 작물 3D 모델 렌더링 컴포넌트
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UStaticMeshComponent* CropMesh;
-
-	// 작물 데이터테이블 참조
+	// 데이터테이블 참조
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
-	UDataTable* CropDataTable;
+	TObjectPtr<UDataTable> CropDataTable;
 
-	// 현재 심어진 작물의 고유 ID (데이터테이블의 Row Name과 매칭)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
+	// 현재 작물 고유 ID
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	FName CurrentCropID;
 
-	// 현재 누적된 작물 성장치
+	// 데이터테이블에서 복사한 작물 정보 (포인터 아닌 값)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
+	FMaumCropData CachedCropData;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
+	bool bCropDataValid = false;
+
+	// 누적 성장치
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	int32 CurrentGrowth = 0;
 
-	// 현재 작물의 성장 단계 (일차)
+	// 현재 성장 단계
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	int32 CurrentStage = 0;
 
-	// 축복치 수신 및 누적 연산
-	UFUNCTION()
-	void UpdateCropGrowth(int32 BlessingValue);
+	// 오늘 물 준 횟수
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
+	int32 WateredToday = 0;
 
-	// 성장 단계 상승 및 상태 업데이트
-	void AdvanceToNextStage();
-
-	// 현재 작물 상태 저장
-	UFUNCTION(BlueprintCallable, Category = "Save")
-	void SaveCropState();
-
-	// 저장된 작물 상태 로드
-	UFUNCTION(BlueprintCallable, Category = "Save")
-	void LoadCropState();
-
-	// 디버깅용 하루 치 성장 강제 적용
-	UFUNCTION(BlueprintCallable, Category = "Cheat")
-	void CheatTimeSkip();
+	// 오늘 비료 사용 여부
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
+	bool bFertilizedToday = false;
 };

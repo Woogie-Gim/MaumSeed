@@ -30,17 +30,21 @@ struct FMaumCropData : public FTableRowBase
 
 	// 완숙까지 필요한 인게임 일수
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
-	int32 GrowthDays;
+	int32 GrowthDays = 3;
 
 	// 하루 요구 물 주기 횟수
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
-	int32 WaterPerDay;
+	int32 WaterPerDay = 1;
 
 	// 성장 보너스를 받는 날씨
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
-	EMaumWeather PreferredWeather;
+	EMaumWeather PreferredWeather = EMaumWeather::Sunny;
+
+	// 비료 사용 시 추가 성장치
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
+	int32 FertilizerBonus = 15;
 
 	// 수확 시 기본 획득 점수
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
-	int32 BaseScore;
+	int32 BaseScore = 10;
 };

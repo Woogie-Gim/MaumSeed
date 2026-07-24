@@ -1,42 +1,84 @@
-
-#include "MaumGridManager.h"
+ï»¿#include "MaumGridManager.h"
 #include "MaumTile.h"
+#include "Engine/World.h"
 
-// Sets default values
 AMaumGridManager::AMaumGridManager()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
-
 }
 
-// Called when the game starts or when spawned
 void AMaumGridManager::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ¼³Á¤µÈ Å¸ÀÏ Å¬·¡½º°¡ ¾øÀ¸¸é ½ºÆù Áß´Ü
-	if (!TileClass) return;
+	GenerateGrid();
+}
+
+void AMaumGridManager::GenerateGrid()
+{
+	if (!TileClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("GridManager: TileClassê°€ ì§€ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤."));
+		return;
+	}
 
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	// 2Â÷¿ø ¹è¿­ ÇüÅÂ Å¸ÀÏ ¹èÄ¡
+	SpawnedTiles.Empty();
+
+	const FVector Origin = GetActorLocation();
+	int32 Index = 0;
+
 	for (int32 X = 0; X < GridSizeX; ++X)
 	{
 		for (int32 Y = 0; Y < GridSizeY; ++Y)
 		{
-			FVector SpawnLocation = FVector(X * TileSpacing, Y * TileSpacing, 0.0f);
-			World->SpawnActor<AMaumTile>(TileClass, SpawnLocation, FRotator::ZeroRotator);
+			// ê·¸ë¦¬ë“œ ë§¤ë‹ˆì € ìœ„ì¹˜ ê¸°ì¤€ ìƒëŒ€ ë°°ì¹˜
+			const FVector SpawnLocation = Origin + FVector(X * TileSpacing, Y * TileSpacing, 0.0f);
+
+			FActorSpawnParameters Params;
+			Params.Owner = this;
+
+			AMaumTile* NewTile = World->SpawnActor<AMaumTile>(
+				TileClass, SpawnLocation, FRotator::ZeroRotator, Params);
+
+			if (!NewTile) continue;
+
+			// íƒ€ì¼ ì‹ë³„ì ë¶€ì—¬ (ì„¸ì´ë¸Œ/ë¡œë“œ ë§¤ì¹­ìš©)
+			NewTile->TileIndex = Index++;
+
+			// ë°ì´í„°í…Œì´ë¸” ì¼ê´„ ì£¼ì…
+			if (CropDataTable)
+			{
+				NewTile->CropDataTable = CropDataTable;
+			}
+
+			SpawnedTiles.Add(NewTile);
 		}
 	}
-	
+
+	UE_LOG(LogTemp, Log, TEXT("GridManager: íƒ€ì¼ %dê°œ ìƒì„± ì™„ë£Œ (%dx%d)"),
+		SpawnedTiles.Num(), GridSizeX, GridSizeY);
 }
 
-// Called every frame
-void AMaumGridManager::Tick(float DeltaTime)
+TArray<AMaumTile*> AMaumGridManager::GetTiles() const
 {
-	Super::Tick(DeltaTime);
+	TArray<AMaumTile*> Result;
+	Result.Reserve(SpawnedTiles.Num());
 
+	for (const TObjectPtr<AMaumTile>& Tile : SpawnedTiles)
+	{
+		Result.Add(Tile.Get());
+	}
+	return Result;
 }
 
+AMaumTile* AMaumGridManager::GetTileByIndex(int32 Index) const
+{
+	if (SpawnedTiles.IsValidIndex(Index))
+	{
+		return SpawnedTiles[Index];
+	}
+	return nullptr;
+}
