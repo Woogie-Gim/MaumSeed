@@ -5,7 +5,11 @@
 #include "MaumAIManager.h"
 #include "MaumWeatherWidget.h"
 #include "MaumGridManager.h"
+#include "MaumSaveGame.h"
 #include "Kismet/GameplayStatics.h"
+
+// 정적 멤버 정의
+const FString AMaumDayManager::SaveSlotName = TEXT("MaumMainSave");
 
 AMaumDayManager::AMaumDayManager()
 {
@@ -80,6 +84,8 @@ void AMaumDayManager::SubmitDiaryAndEndDay(const FString& DiaryText)
 	}
 
 	bWaitingForBlessing = true;
+	OnWaitingStateChanged.Broadcast(true);   // 대기 시작 알림
+
 	AIManager->SendDiaryToLLM(DiaryText);
 }
 
@@ -88,6 +94,8 @@ void AMaumDayManager::HandleBlessingReceived(int32 BlessingValue)
 	if (!bWaitingForBlessing) return;
 
 	bWaitingForBlessing = false;
+	OnWaitingStateChanged.Broadcast(false);   // 대기 종료 알림
+
 	ProcessEndOfDay(BlessingValue);
 }
 
@@ -136,6 +144,9 @@ void AMaumDayManager::ProcessEndOfDay(int32 BlessingValue)
 
 	UE_LOG(LogTemp, Warning, TEXT("--- 정산 완료. %d일차 시작 (누적 점수: %d) ---"), CurrentDay, TotalScore);
 
+	// 하루 정산이 끝나면 자동 저장
+	SaveGame();
+
 	OnDayEnded.Broadcast(CurrentDay, TotalScore);
 }
 
@@ -170,10 +181,80 @@ void AMaumDayManager::BindTiles()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("DayManager: 타일 %d개를 인식했습니다."), AllTiles.Num());
+
+	// 타일이 준비된 뒤 저장된 게임 불러오기
+	LoadGame();
+	RefreshWeatherUI();
 }
 
 void AMaumDayManager::SetWeatherWidget(UMaumWeatherWidget* InWidget)
 {
 	WeatherWidget = InWidget;
 	RefreshWeatherUI();
+}
+
+void AMaumDayManager::SaveGame()
+{
+	UMaumSaveGame* SaveObj = Cast<UMaumSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UMaumSaveGame::StaticClass()));
+	if (!SaveObj) return;
+
+	// 게임 진행 상태
+	SaveObj->CurrentDay = CurrentDay;
+	SaveObj->TotalScore = TotalScore;
+
+	if (WeatherManager)
+	{
+		SaveObj->TodayWeather = WeatherManager->GetCurrentWeather();
+		SaveObj->TomorrowWeather = WeatherManager->GetTomorrowWeather();
+	}
+
+	// 심어진 작물만 저장
+	for (AMaumTile* Tile : AllTiles)
+	{
+		if (!Tile) continue;
+
+		AMaumCrop* Crop = Tile->GetPlantedCrop();
+		if (!Crop || !Crop->IsCropDataValid()) continue;
+
+		FMaumCropSaveData Data;
+		Data.TileIndex = Tile->TileIndex;
+		Crop->GetSaveData(Data.CropID, Data.Growth, Data.Stage);
+
+		SaveObj->Crops.Add(Data);
+	}
+
+	UGameplayStatics::SaveGameToSlot(SaveObj, SaveSlotName, 0);
+
+	UE_LOG(LogTemp, Log, TEXT("게임 저장 완료 (%d일차, 작물 %d개, 점수 %d)"),
+		CurrentDay, SaveObj->Crops.Num(), TotalScore);
+}
+
+void AMaumDayManager::LoadGame()
+{
+	if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, 0))
+	{
+		UE_LOG(LogTemp, Log, TEXT("세이브 파일이 없습니다. 새 게임으로 시작합니다."));
+		return;
+	}
+
+	UMaumSaveGame* LoadObj = Cast<UMaumSaveGame>(
+		UGameplayStatics::LoadGameFromSlot(SaveSlotName, 0));
+	if (!LoadObj) return;
+
+	// 게임 진행 상태 복원
+	CurrentDay = LoadObj->CurrentDay;
+	TotalScore = LoadObj->TotalScore;
+
+	// 작물 복원: TileIndex로 해당 타일을 찾아 심기
+	for (const FMaumCropSaveData& Data : LoadObj->Crops)
+	{
+		AMaumTile* Tile = GridManager ? GridManager->GetTileByIndex(Data.TileIndex) : nullptr;
+		if (!Tile) continue;
+
+		Tile->RestoreCrop(Data.CropID, Data.Growth, Data.Stage);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("게임 로드 완료 (%d일차, 작물 %d개, 점수 %d)"),
+		CurrentDay, LoadObj->Crops.Num(), TotalScore);
 }

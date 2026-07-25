@@ -213,3 +213,10 @@ void AMaumCrop::ApplySaveData(FName InCropID, int32 InGrowth, int32 InStage, UDa
 	CurrentStage = InStage;
 	UpdateStageMesh();
 }
+
+void AMaumCrop::GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage) const
+{
+	OutCropID = CurrentCropID;
+	OutGrowth = CurrentGrowth;
+	OutStage = CurrentStage;
+}

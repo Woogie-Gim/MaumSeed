@@ -51,10 +51,14 @@ class MAUMSEED_API AMaumCrop : public AActor
 	FName GetCropID() const { return CurrentCropID; }
 
 	UFUNCTION(BlueprintPure, Category = "Crop")
-	bool IsDataValid() const { return bCropDataValid; }
+	bool IsCropDataValid() const { return bCropDataValid; }
 
 	// 세이브/로드용
 	void ApplySaveData(FName InCropID, int32 InGrowth, int32 InStage, UDataTable* InDataTable);
+
+	// 세이브용 현재 상태 조회
+	UFUNCTION(BlueprintPure, Category = "Save")
+	void GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage) const;
 
 	// 작물 3D 모델
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

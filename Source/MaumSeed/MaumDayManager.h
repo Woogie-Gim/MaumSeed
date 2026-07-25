@@ -13,6 +13,9 @@ class UMaumWeatherWidget;
 // 하루 종료 알림 (UI 정산 화면용)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDayEnded, int32, NewDay, int32, TotalScore);
 
+// AI 응답 대기 상태 변경 알림 (UI 로딩 표시용)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaitingStateChanged, bool, bIsWaiting);
+
 UCLASS()
 class MAUMSEED_API AMaumDayManager : public AActor
 {
@@ -45,6 +48,18 @@ public:
 	// 날씨 UI 위젯 (블루프린트에서 할당)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Day|UI")
 	TObjectPtr<UMaumWeatherWidget> WeatherWidget;
+
+	// 전체 게임 상태 저장
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	void SaveGame();
+
+	// 전체 게임 상태 로드
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	void LoadGame();
+
+	// AI 응답 대기 상태 변경 이벤트
+	UPROPERTY(BlueprintAssignable, Category = "Day|Event")
+	FOnWaitingStateChanged OnWaitingStateChanged;
 
 protected:
 	virtual void BeginPlay() override;
@@ -90,4 +105,7 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<class AMaumGridManager> GridManager;
+
+	// 세이브 슬롯 이름
+	static const FString SaveSlotName;
 };

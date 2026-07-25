@@ -105,3 +105,30 @@ void AMaumTile::RestoreTileScale()
 {
 	SetActorScale3D(FVector(1.0f));
 }
+
+void AMaumTile::RestoreCrop(FName CropID, int32 Growth, int32 Stage)
+{
+	// 기존 작물이 있으면 제거
+	if (PlantedCrop)
+	{
+		PlantedCrop->Destroy();
+		PlantedCrop = nullptr;
+	}
+
+	if (CropID.IsNone() || !CropDataTable || !CropActorClass) return;
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	const FVector SpawnLocation = GetActorLocation() + FVector(0.f, 0.f, 10.f);
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+
+	AMaumCrop* NewCrop = World->SpawnActor<AMaumCrop>(
+		CropActorClass, SpawnLocation, FRotator::ZeroRotator, Params);
+	if (!NewCrop) return;
+
+	// 저장된 상태 적용 (InitCrop + 성장치 복원을 한 번에)
+	NewCrop->ApplySaveData(CropID, Growth, Stage, CropDataTable);
+	PlantedCrop = NewCrop;
+}

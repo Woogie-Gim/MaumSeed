@@ -74,18 +74,19 @@ void AMaumAIManager::SendDiaryToLLM(const FString& DiaryText)
 
 void AMaumAIManager::OnLLMResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
 {
-	// 통신 검증
+	// 통신 실패 시 중립 축복치(50)로 폴백 → 게임이 멈추지 않음
 	if (!bWasSuccessful || !Response.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("실패 상세: bWasSuccessful=%d, Status=%d, Code=%d"),
-			bWasSuccessful, (int32)Request->GetStatus(),
-			Response.IsValid() ? Response->GetResponseCode() : -1);
+		UE_LOG(LogTemp, Error, TEXT("LLM 통신 실패. 중립 축복치(50)로 진행합니다."));
+		OnBlessingReceived.Broadcast(50);
 		return;
 	}
 
 	if (!EHttpResponseCodes::IsOk(Response->GetResponseCode()))
 	{
-		UE_LOG(LogTemp, Error, TEXT("LLM 통신 에러! HTTP 상태 코드: %d, 상세 내용: %s"), Response->GetResponseCode(), *Response->GetContentAsString());
+		UE_LOG(LogTemp, Error, TEXT("LLM 통신 에러! 코드: %d. 중립 축복치로 진행합니다."),
+			Response->GetResponseCode());
+		OnBlessingReceived.Broadcast(50);
 		return;
 	}
 

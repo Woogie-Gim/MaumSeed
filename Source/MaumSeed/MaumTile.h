@@ -26,7 +26,7 @@ class MAUMSEED_API AMaumTile : public AActor
 {
 	GENERATED_BODY()
 
-	public:
+public:
 	AMaumTile();
 
 	// 타일 상호작용 진입점
@@ -66,6 +66,10 @@ class MAUMSEED_API AMaumTile : public AActor
 	// 수확 이벤트
 	UPROPERTY(BlueprintAssignable, Category = "Tile|Event")
 	FOnCropHarvested OnCropHarvested;
+
+	// 세이브 데이터로부터 작물 복원
+	UFUNCTION(BlueprintCallable, Category = "Tile")
+	void RestoreCrop(FName CropID, int32 Growth, int32 Stage);
 
 protected:
 	virtual void BeginPlay() override;
