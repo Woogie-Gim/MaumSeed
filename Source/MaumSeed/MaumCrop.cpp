@@ -87,9 +87,11 @@ void AMaumCrop::ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeathe
 	// 기준치 100에서 시작
 	int32 Growth = 100;
 
-	// 물주기 일치도: 부족/과다 모두 감점 (회당 25점)
-	const int32 WaterDiff = FMath::Abs(WateredToday - CachedCropData.WaterPerDay);
-	const int32 WaterPenalty = WaterDiff * 25;
+	// 물주기 일치도: 부족은 크게, 과다는 작게 감점
+	const int32 WaterDiff = WateredToday - CachedCropData.WaterPerDay;
+	const int32 WaterPenalty = (WaterDiff < 0)
+		? FMath::Abs(WaterDiff) * 30    // 부족: 큰 페널티
+		: WaterDiff * 10;                // 과다: 작은 페널티
 	Growth -= WaterPenalty;
 
 	// 날씨 일치 보너스

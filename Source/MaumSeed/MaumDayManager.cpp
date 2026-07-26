@@ -78,15 +78,26 @@ void AMaumDayManager::SubmitDiaryAndEndDay(const FString& DiaryText)
 
 	if (!AIManager)
 	{
-		UE_LOG(LogTemp, Error, TEXT("DayManager: AIManager가 없어 중립 축복치로 진행합니다."));
 		EndDayImmediate(50);
 		return;
 	}
 
 	bWaitingForBlessing = true;
-	OnWaitingStateChanged.Broadcast(true);   // 대기 시작 알림
+	OnWaitingStateChanged.Broadcast(true);
 
-	AIManager->SendDiaryToLLM(DiaryText);
+	// 오늘 날씨를 한국어 문자열로 변환해 함께 전달
+	FString WeatherText = TEXT("맑음");
+	if (WeatherManager)
+	{
+		switch (WeatherManager->GetCurrentWeather())
+		{
+		case EMaumWeather::Sunny:  WeatherText = TEXT("맑음"); break;
+		case EMaumWeather::Cloudy: WeatherText = TEXT("흐림"); break;
+		case EMaumWeather::Rainy:  WeatherText = TEXT("비");   break;
+		}
+	}
+
+	AIManager->SendDiaryToLLM(DiaryText, WeatherText);
 }
 
 void AMaumDayManager::HandleBlessingReceived(int32 BlessingValue)
