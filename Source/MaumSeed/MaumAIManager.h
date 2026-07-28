@@ -12,6 +12,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBlessingReceived, int32, Blessing
 // AI 조언가 대사 전달
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAdviceReceived, const FString&, AdviceMessage);
 
+// 리더보드 수신 알림 (JSON 원문 전달)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLeaderboardReceived, const FString&, LeaderboardJson);
+
 UCLASS()
 class MAUMSEED_API AMaumAIManager : public AActor
 {
@@ -33,6 +36,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "AI|Event")
 	FOnAdviceReceived OnAdviceReceived;
 
+	// 점수 서버 전송
+	UFUNCTION(BlueprintCallable, Category = "Rank")
+	void SubmitScore(const FString& PlayerName, int32 Score);
+
+	// 리더보드 조회
+	UFUNCTION(BlueprintCallable, Category = "Rank")
+	void RequestLeaderboard();
+
+	// 리더보드 수신 이벤트 (이 블록 추가)
+	UPROPERTY(BlueprintAssignable, Category = "Rank|Event")
+	FOnLeaderboardReceived OnLeaderboardReceived;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -44,4 +59,7 @@ public:
 private:
 	// LLM 서버 응답 수신 및 처리
 	void OnLLMResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+
+	void OnScoreSubmitted(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+	void OnLeaderboardResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 };

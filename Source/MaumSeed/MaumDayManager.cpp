@@ -23,6 +23,12 @@ void AMaumDayManager::BeginPlay()
 	CollectSceneActors();
 	RefreshWeatherUI();
 
+	// Render 무료 플랜 sleep 대비: 시작 시 서버 예열 겸 리더보드 조회
+	if (AIManager)
+	{
+		AIManager->RequestLeaderboard();
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("=== %d일차 시작 ==="), CurrentDay);
 }
 
@@ -165,6 +171,12 @@ void AMaumDayManager::HandleCropHarvested(int32 Score)
 {
 	TotalScore += Score;
 	UE_LOG(LogTemp, Log, TEXT("수확 점수 +%d (누적: %d)"), Score, TotalScore);
+
+	// 서버에 누적 점수 전송 (플레이어 이름은 임시)
+	if (AIManager)
+	{
+		AIManager->SubmitScore(TEXT("Player1"), TotalScore);
+	}
 }
 
 void AMaumDayManager::RefreshWeatherUI()

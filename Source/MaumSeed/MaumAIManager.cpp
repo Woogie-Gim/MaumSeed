@@ -4,6 +4,8 @@
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
 
+static const FString ServerBaseURL = TEXT("https://maum-server.onrender.com");
+
 AMaumAIManager::AMaumAIManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -27,11 +29,11 @@ void AMaumAIManager::SendDiaryToLLM(const FString& DiaryText, const FString& Wea
 	Request->OnProcessRequestComplete().BindUObject(this, &AMaumAIManager::OnLLMResponseReceived);
 
 	// 우리 서버 엔드포인트 (개발 중엔 localhost, 배포 시 실제 주소로 교체)
-	FString Endpoint = TEXT("http://127.0.0.1:3000/api/blessing");
+	FString Endpoint = ServerBaseURL + TEXT("/api/blessing");
 	Request->SetURL(Endpoint);
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-	Request->SetTimeout(30.0f);   // 서버 경유라 짧게
+	Request->SetTimeout(60.0f);   // Render sleep 대비 여유
 
 	// 요청 바디: diary + weather
 	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
@@ -84,4 +86,67 @@ void AMaumAIManager::OnLLMResponseReceived(FHttpRequestPtr Request, FHttpRespons
 
 	OnAdviceReceived.Broadcast(AdviceMessage);
 	OnBlessingReceived.Broadcast(BlessingValue);
+}
+
+void AMaumAIManager::SubmitScore(const FString& PlayerName, int32 Score)
+{
+	FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
+	Request->OnProcessRequestComplete().BindUObject(this, &AMaumAIManager::OnScoreSubmitted);
+
+	Request->SetURL(ServerBaseURL + TEXT("/api/score"));
+	Request->SetVerb(TEXT("POST"));
+	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	Request->SetTimeout(60.0f);
+
+	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject());
+	JsonObject->SetStringField(TEXT("name"), PlayerName);
+	JsonObject->SetNumberField(TEXT("score"), Score);
+
+	FString JsonString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
+	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+
+	Request->SetContentAsString(JsonString);
+	Request->ProcessRequest();
+
+	UE_LOG(LogTemp, Log, TEXT("점수 전송: %s / %d점"), *PlayerName, Score);
+}
+
+void AMaumAIManager::OnScoreSubmitted(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+	if (bWasSuccessful && Response.IsValid() && EHttpResponseCodes::IsOk(Response->GetResponseCode()))
+	{
+		UE_LOG(LogTemp, Log, TEXT("점수 등록 성공: %s"), *Response->GetContentAsString());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("점수 등록 실패"));
+	}
+}
+
+void AMaumAIManager::RequestLeaderboard()
+{
+	FHttpRequestRef Request = FHttpModule::Get().CreateRequest();
+	Request->OnProcessRequestComplete().BindUObject(this, &AMaumAIManager::OnLeaderboardResponse);
+
+	Request->SetURL(ServerBaseURL + TEXT("/api/leaderboard"));
+	Request->SetVerb(TEXT("GET"));
+	Request->SetTimeout(60.0f);
+
+	Request->ProcessRequest();
+}
+
+void AMaumAIManager::OnLeaderboardResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+	if (bWasSuccessful && Response.IsValid() && EHttpResponseCodes::IsOk(Response->GetResponseCode()))
+	{
+		FString Json = Response->GetContentAsString();
+		UE_LOG(LogTemp, Log, TEXT("리더보드 수신: %s"), *Json);
+		OnLeaderboardReceived.Broadcast(Json);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("리더보드 조회 실패"));
+		OnLeaderboardReceived.Broadcast(TEXT("[]"));
+	}
 }
