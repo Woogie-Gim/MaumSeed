@@ -6,6 +6,7 @@
 #include "MaumWeatherWidget.h"
 #include "MaumGridManager.h"
 #include "MaumSaveGame.h"
+#include "MaumGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 
 // 정적 멤버 정의
@@ -172,10 +173,16 @@ void AMaumDayManager::HandleCropHarvested(int32 Score)
 	TotalScore += Score;
 	UE_LOG(LogTemp, Log, TEXT("수확 점수 +%d (누적: %d)"), Score, TotalScore);
 
-	// 서버에 누적 점수 전송 (플레이어 이름은 임시)
 	if (AIManager)
 	{
-		AIManager->SubmitScore(TEXT("Player1"), TotalScore);
+		// GameInstance에서 닉네임 가져오기
+		FString PlayerName = TEXT("정원지기");
+		if (UMaumGameInstance* GI = Cast<UMaumGameInstance>(GetGameInstance()))
+		{
+			PlayerName = GI->PlayerName;
+		}
+
+		AIManager->SubmitScore(PlayerName, TotalScore);
 	}
 }
 
