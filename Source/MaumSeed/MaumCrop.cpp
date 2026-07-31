@@ -1,4 +1,5 @@
 ﻿#include "MaumCrop.h"
+#include "Kismet/GameplayStatics.h"
 
 AMaumCrop::AMaumCrop()
 {
@@ -6,11 +7,24 @@ AMaumCrop::AMaumCrop()
 
 	CropMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CropMesh"));
 	RootComponent = CropMesh;
+
+	// 클릭/터치 받도록 콜리전 설정
+	CropMesh->SetSimulatePhysics(false);   // 물리 끄기
+	CropMesh->SetEnableGravity(false);     // 중력 끄기
+	CropMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CropMesh->SetCollisionObjectType(ECC_WorldDynamic);
+	CropMesh->SetCollisionResponseToAllChannels(ECR_Block);
 }
 
 void AMaumCrop::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 클릭/터치 이벤트 바인딩 (수확용)
+	OnClicked.AddDynamic(this, &AMaumCrop::OnCropClicked);
+	OnInputTouchBegin.AddDynamic(this, &AMaumCrop::OnCropTouched);
+
+	UE_LOG(LogTemp, Warning, TEXT("[작물] 클릭 이벤트 바인딩 완료"));
 
 	// 에디터에서 미리 배치한 경우 대비
 	if (!bCropDataValid && CropDataTable && !CurrentCropID.IsNone())
@@ -59,6 +73,12 @@ void AMaumCrop::WaterCrop()
 	WateredToday++;
 	UE_LOG(LogTemp, Log, TEXT("[%s] 물주기 (%d/%d회)"),
 		*CachedCropData.Name, WateredToday, CachedCropData.WaterPerDay);
+
+	// 물주기 효과음
+	if (WaterSound)
+	{
+		UGameplayStatics::PlaySound2D(this, WaterSound);
+	}
 }
 
 void AMaumCrop::ApplyFertilizer()
@@ -153,9 +173,13 @@ void AMaumCrop::UpdateStageMesh()
 	if (StageMeshes[MeshIndex])
 	{
 		CropMesh->SetStaticMesh(StageMeshes[MeshIndex]);
-		CropMesh->MarkRenderStateDirty();   // 렌더 상태 강제 갱신
+		CropMesh->MarkRenderStateDirty();
 
-		UE_LOG(LogTemp, Log, TEXT("[%s] 메시 교체: 인덱스 %d"), *CachedCropData.Name, MeshIndex);
+		// 메시 교체 후 클릭 받도록 콜리전 재설정
+		CropMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		CropMesh->SetCollisionObjectType(ECC_WorldDynamic);
+		CropMesh->SetCollisionResponseToAllChannels(ECR_Block);
+		CropMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);   // 클릭용
 	}
 	else
 	{
@@ -171,6 +195,12 @@ bool AMaumCrop::IsHarvestable() const
 int32 AMaumCrop::HarvestCrop()
 {
 	if (!IsHarvestable()) return 0;
+
+	// 수확 효과음
+	if (HarvestSound)
+	{
+		UGameplayStatics::PlaySound2D(this, HarvestSound);
+	}
 
 	// 품질 보정: 누적 성장치가 기준을 넘을수록 가산점
 	const int32 IdealGrowth = CachedCropData.GrowthDays * 100;
@@ -221,4 +251,31 @@ void AMaumCrop::GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage)
 	OutCropID = CurrentCropID;
 	OutGrowth = CurrentGrowth;
 	OutStage = CurrentStage;
+}
+
+void AMaumCrop::OnCropClicked(AActor* TouchedActor, FKey ButtonPressed)
+{
+	UE_LOG(LogTemp, Warning, TEXT("작물 클릭 감지됨!"));   // 임시 로그
+	TryHarvestByClick();
+}
+
+void AMaumCrop::OnCropTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor)
+{
+	TryHarvestByClick();
+}
+
+void AMaumCrop::TryHarvestByClick()
+{
+	// 아직 다 안 자랐으면 무시
+	if (!IsHarvestable())
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("[%s] 아직 수확할 수 없습니다."),
+			bCropDataValid ? *CachedCropData.Name : TEXT("작물"));
+		return;
+	}
+
+	const int32 Score = HarvestCrop();   // 기존 수확 로직 (효과음·점수 포함)
+
+	// 타일에 수확 완료 알림 (타일이 자기 자신 정리)
+	OnHarvestedSelf.Broadcast(Score);
 }

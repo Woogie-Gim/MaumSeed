@@ -90,6 +90,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tile")
 	TObjectPtr<AMaumCrop> PlantedCrop;
 
+	UFUNCTION()
+	void HandleCropSelfHarvested(int32 Score);
+
 private:
 	FTimerHandle ScaleRestoreTimer;
 };

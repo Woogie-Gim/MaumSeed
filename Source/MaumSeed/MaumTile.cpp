@@ -28,42 +28,35 @@ void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActo
 
 void AMaumTile::InteractWithTile()
 {
+	// 다 자란 작물이 있으면 모드와 무관하게 수확 우선
+	if (PlantedCrop && PlantedCrop->IsHarvestable())
+	{
+		const int32 Score = PlantedCrop->HarvestCrop();
+		OnCropHarvested.Broadcast(Score);
+		PlantedCrop->Destroy();
+		PlantedCrop = nullptr;
+		return;
+	}
+
+	// 그 외엔 기존 모드별 동작
 	switch (InteractMode)
 	{
 	case EMaumInteractMode::Plant:
 		if (IsEmpty())
-		{
 			PlantCrop(SelectedCropID, CropDataTable);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Log, TEXT("타일 %d: 이미 작물이 심어져 있습니다."), TileIndex);
-		}
 		break;
 
 	case EMaumInteractMode::Water:
 		if (PlantedCrop)
-		{
 			PlantedCrop->WaterCrop();
-		}
 		break;
 
 	case EMaumInteractMode::Fertilize:
 		if (PlantedCrop)
-		{
 			PlantedCrop->ApplyFertilizer();
-		}
 		break;
 
-	case EMaumInteractMode::Harvest:
-		if (PlantedCrop && PlantedCrop->IsHarvestable())
-		{
-			const int32 Score = PlantedCrop->HarvestCrop();
-			OnCropHarvested.Broadcast(Score);
-
-			PlantedCrop->Destroy();
-			PlantedCrop = nullptr;
-		}
+	default:
 		break;
 	}
 }
@@ -87,6 +80,10 @@ bool AMaumTile::PlantCrop(FName CropID, UDataTable* InDataTable)
 	if (!NewCrop) return false;
 
 	NewCrop->InitCrop(CropID, InDataTable);
+
+	// 작물이 스스로 수확되면 타일이 정리하도록 구독
+	NewCrop->OnHarvestedSelf.AddDynamic(this, &AMaumTile::HandleCropSelfHarvested);
+
 	PlantedCrop = NewCrop;
 
 	return true;
@@ -130,5 +127,21 @@ void AMaumTile::RestoreCrop(FName CropID, int32 Growth, int32 Stage)
 
 	// 저장된 상태 적용 (InitCrop + 성장치 복원을 한 번에)
 	NewCrop->ApplySaveData(CropID, Growth, Stage, CropDataTable);
+
+	NewCrop->OnHarvestedSelf.AddDynamic(this, &AMaumTile::HandleCropSelfHarvested);
+
 	PlantedCrop = NewCrop;
+}
+
+void AMaumTile::HandleCropSelfHarvested(int32 Score)
+{
+	// DayManager가 점수를 집계하도록 기존 수확 이벤트 브로드캐스트
+	OnCropHarvested.Broadcast(Score);
+
+	// 작물 정리
+	if (PlantedCrop)
+	{
+		PlantedCrop->Destroy();
+		PlantedCrop = nullptr;
+	}
 }

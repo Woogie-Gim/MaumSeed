@@ -6,12 +6,15 @@
 #include "MaumCropData.h"
 #include "MaumCrop.generated.h"
 
+// 작물 수확 완료 알림 (타일이 받아서 정리)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropHarvestedSelf, int32, Score);
+
 UCLASS()
 class MAUMSEED_API AMaumCrop : public AActor
 {
 	GENERATED_BODY()
 
-	public:
+public:
 	AMaumCrop();
 
 	// 작물 데이터 초기화 (심을 때 호출)
@@ -68,6 +71,18 @@ class MAUMSEED_API AMaumCrop : public AActor
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visual")
 	TArray<TObjectPtr<UStaticMesh>> StageMeshes;
 
+	// 물주기 효과음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Sound")
+	TObjectPtr<USoundBase> WaterSound;
+
+	// 수확 효과음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Sound")
+	TObjectPtr<USoundBase> HarvestSound;
+
+	// 이 작물이 클릭되어 수확될 때 (타일이 구독)
+	UPROPERTY(BlueprintAssignable, Category = "Crop|Event")
+	FOnCropHarvestedSelf OnHarvestedSelf;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -107,4 +122,12 @@ protected:
 	// 오늘 비료 사용 여부
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	bool bFertilizedToday = false;
+
+	UFUNCTION()
+	void OnCropClicked(AActor* TouchedActor, FKey ButtonPressed);
+
+	UFUNCTION()
+	void OnCropTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor);
+
+	void TryHarvestByClick();
 };
