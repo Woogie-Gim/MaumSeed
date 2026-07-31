@@ -1,5 +1,6 @@
 ﻿#include "MaumCrop.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 AMaumCrop::AMaumCrop()
 {
@@ -8,23 +9,15 @@ AMaumCrop::AMaumCrop()
 	CropMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CropMesh"));
 	RootComponent = CropMesh;
 
-	// 클릭/터치 받도록 콜리전 설정
-	CropMesh->SetSimulatePhysics(false);   // 물리 끄기
-	CropMesh->SetEnableGravity(false);     // 중력 끄기
-	CropMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	CropMesh->SetCollisionObjectType(ECC_WorldDynamic);
-	CropMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	// 자동 수확 방식이라 클릭 콜리전은 불필요, 물리만 확실히 끔
+	CropMesh->SetSimulatePhysics(false);
+	CropMesh->SetEnableGravity(false);
+	CropMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AMaumCrop::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// 클릭/터치 이벤트 바인딩 (수확용)
-	OnClicked.AddDynamic(this, &AMaumCrop::OnCropClicked);
-	OnInputTouchBegin.AddDynamic(this, &AMaumCrop::OnCropTouched);
-
-	UE_LOG(LogTemp, Warning, TEXT("[작물] 클릭 이벤트 바인딩 완료"));
 
 	// 에디터에서 미리 배치한 경우 대비
 	if (!bCropDataValid && CropDataTable && !CurrentCropID.IsNone())
@@ -103,18 +96,17 @@ void AMaumCrop::ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeathe
 		return;
 	}
 
-	// 성장 판정식
-	// 기준치 100에서 시작
+	// --- 성장 판정식 ---
 	int32 Growth = 100;
 
-	// 물주기 일치도: 부족은 크게, 과다는 작게 감점
+	// 1) 물주기 일치도: 부족은 크게, 과다는 작게 감점
 	const int32 WaterDiff = WateredToday - CachedCropData.WaterPerDay;
 	const int32 WaterPenalty = (WaterDiff < 0)
-		? FMath::Abs(WaterDiff) * 30    // 부족: 큰 페널티
-		: WaterDiff * 10;                // 과다: 작은 페널티
+		? FMath::Abs(WaterDiff) * 30
+		: WaterDiff * 10;
 	Growth -= WaterPenalty;
 
-	// 날씨 일치 보너스
+	// 2) 날씨 일치 보너스
 	int32 WeatherBonus = 0;
 	if (TodayWeather == CachedCropData.PreferredWeather)
 	{
@@ -122,7 +114,7 @@ void AMaumCrop::ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeathe
 		Growth += WeatherBonus;
 	}
 
-	// 비료 보너스
+	// 3) 비료 보너스
 	int32 FertBonus = 0;
 	if (bFertilizedToday)
 	{
@@ -130,11 +122,10 @@ void AMaumCrop::ProcessDailyGrowth(int32 BlessingValue, EMaumWeather TodayWeathe
 		Growth += FertBonus;
 	}
 
-	// AI 축복치: 0~100 → -10~+10 (전체 영향력 약 10% 유지)
+	// 4) AI 축복치: 0~100 → -10~+10 (보조 보정)
 	const int32 BlessingBonus = FMath::Clamp((BlessingValue - 50) / 5, -10, 10);
 	Growth += BlessingBonus;
 
-	// 음수 방지
 	Growth = FMath::Max(Growth, 0);
 	CurrentGrowth += Growth;
 
@@ -156,7 +147,15 @@ void AMaumCrop::AdvanceToNextStage()
 
 	if (IsHarvestable())
 	{
-		UE_LOG(LogTemp, Log, TEXT("[%s] 다 자랐습니다! 수확할 수 있어요."), *CachedCropData.Name);
+		UE_LOG(LogTemp, Log, TEXT("[%s] 다 자랐습니다! 곧 수확됩니다."), *CachedCropData.Name);
+
+		// 수확 임박 자막 표시 요청
+		const FString Msg = FString::Printf(TEXT("%s이(가) 다 자랐어요! 곧 수확됩니다..."), *CachedCropData.Name);
+		OnHarvestImminent.Broadcast(Msg);
+
+		// 3초 후 자동 수확
+		GetWorldTimerManager().SetTimer(
+			AutoHarvestTimer, this, &AMaumCrop::AutoHarvest, 3.0f, false);
 	}
 	else
 	{
@@ -169,27 +168,24 @@ void AMaumCrop::UpdateStageMesh()
 	if (StageMeshes.Num() == 0 || !CropMesh) return;
 
 	const int32 MeshIndex = FMath::Clamp(CurrentStage, 0, StageMeshes.Num() - 1);
-
 	if (StageMeshes[MeshIndex])
 	{
 		CropMesh->SetStaticMesh(StageMeshes[MeshIndex]);
 		CropMesh->MarkRenderStateDirty();
-
-		// 메시 교체 후 클릭 받도록 콜리전 재설정
-		CropMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		CropMesh->SetCollisionObjectType(ECC_WorldDynamic);
-		CropMesh->SetCollisionResponseToAllChannels(ECR_Block);
-		CropMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);   // 클릭용
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("StageMeshes[%d]가 비어 있습니다."), MeshIndex);
 	}
 }
 
 bool AMaumCrop::IsHarvestable() const
 {
 	return bCropDataValid && CurrentStage >= CachedCropData.GrowthDays;
+}
+
+void AMaumCrop::AutoHarvest()
+{
+	if (!IsHarvestable()) return;
+
+	const int32 Score = HarvestCrop();   // 효과음·점수 계산 포함
+	OnHarvestedSelf.Broadcast(Score);    // 타일이 받아서 정리
 }
 
 int32 AMaumCrop::HarvestCrop()
@@ -244,6 +240,16 @@ void AMaumCrop::ApplySaveData(FName InCropID, int32 InGrowth, int32 InStage, UDa
 	CurrentGrowth = InGrowth;
 	CurrentStage = InStage;
 	UpdateStageMesh();
+
+	// 이미 다 자란 상태로 로드되면 자동 수확 예약
+	if (IsHarvestable())
+	{
+		const FString Msg = FString::Printf(TEXT("%s이(가) 다 자랐어요! 곧 수확됩니다..."), *CachedCropData.Name);
+		OnHarvestImminent.Broadcast(Msg);
+
+		GetWorldTimerManager().SetTimer(
+			AutoHarvestTimer, this, &AMaumCrop::AutoHarvest, 3.0f, false);
+	}
 }
 
 void AMaumCrop::GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage) const
@@ -251,31 +257,4 @@ void AMaumCrop::GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage)
 	OutCropID = CurrentCropID;
 	OutGrowth = CurrentGrowth;
 	OutStage = CurrentStage;
-}
-
-void AMaumCrop::OnCropClicked(AActor* TouchedActor, FKey ButtonPressed)
-{
-	UE_LOG(LogTemp, Warning, TEXT("작물 클릭 감지됨!"));   // 임시 로그
-	TryHarvestByClick();
-}
-
-void AMaumCrop::OnCropTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor)
-{
-	TryHarvestByClick();
-}
-
-void AMaumCrop::TryHarvestByClick()
-{
-	// 아직 다 안 자랐으면 무시
-	if (!IsHarvestable())
-	{
-		UE_LOG(LogTemp, Verbose, TEXT("[%s] 아직 수확할 수 없습니다."),
-			bCropDataValid ? *CachedCropData.Name : TEXT("작물"));
-		return;
-	}
-
-	const int32 Score = HarvestCrop();   // 기존 수확 로직 (효과음·점수 포함)
-
-	// 타일에 수확 완료 알림 (타일이 자기 자신 정리)
-	OnHarvestedSelf.Broadcast(Score);
 }

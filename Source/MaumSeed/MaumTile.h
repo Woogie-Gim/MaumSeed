@@ -21,6 +21,9 @@ enum class EMaumInteractMode : uint8
 // 수확 알림 델리게이트 (DayManager가 점수 집계)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropHarvested, int32, Score);
 
+// 수확 임박 자막 중계 (DayManager가 구독)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTileHarvestImminent, const FString&, Message);
+
 UCLASS()
 class MAUMSEED_API AMaumTile : public AActor
 {
@@ -67,6 +70,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Tile|Event")
 	FOnCropHarvested OnCropHarvested;
 
+	// 수확 임박 자막 중계 이벤트
+	UPROPERTY(BlueprintAssignable, Category = "Tile|Event")
+	FOnTileHarvestImminent OnTileHarvestImminent;
+
 	// 세이브 데이터로부터 작물 복원
 	UFUNCTION(BlueprintCallable, Category = "Tile")
 	void RestoreCrop(FName CropID, int32 Growth, int32 Stage);
@@ -92,6 +99,10 @@ protected:
 
 	UFUNCTION()
 	void HandleCropSelfHarvested(int32 Score);
+
+	// 작물의 수확 임박 자막을 위로 중계
+	UFUNCTION()
+	void RelayHarvestImminent(const FString& Message);
 
 private:
 	FTimerHandle ScaleRestoreTimer;

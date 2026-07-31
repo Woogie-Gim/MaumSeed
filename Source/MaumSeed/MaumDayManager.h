@@ -16,6 +16,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnDayEnded, int32, NewDay, int32, 
 // AI 응답 대기 상태 변경 알림 (UI 로딩 표시용)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaitingStateChanged, bool, bIsWaiting);
 
+// 수확 임박 자막 (UI가 구독)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHarvestMessage, const FString&, Message);
+
 UCLASS()
 class MAUMSEED_API AMaumDayManager : public AActor
 {
@@ -60,6 +63,10 @@ public:
 	// AI 응답 대기 상태 변경 이벤트
 	UPROPERTY(BlueprintAssignable, Category = "Day|Event")
 	FOnWaitingStateChanged OnWaitingStateChanged;
+
+	// 수확 임박 자막 알림 (UI 구독용)
+	UPROPERTY(BlueprintAssignable, Category = "Day|Event")
+	FOnHarvestMessage OnHarvestMessage;
 
 protected:
 	virtual void BeginPlay() override;
@@ -108,4 +115,7 @@ protected:
 
 	// 세이브 슬롯 이름
 	static const FString SaveSlotName;
+
+	UFUNCTION()
+	void HandleHarvestImminent(const FString& Message);
 };

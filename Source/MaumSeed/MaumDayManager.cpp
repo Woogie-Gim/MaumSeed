@@ -208,6 +208,7 @@ void AMaumDayManager::BindTiles()
 
 		AllTiles.Add(Tile);
 		Tile->OnCropHarvested.AddDynamic(this, &AMaumDayManager::HandleCropHarvested);
+		Tile->OnTileHarvestImminent.AddDynamic(this, &AMaumDayManager::HandleHarvestImminent);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("DayManager: 타일 %d개를 인식했습니다."), AllTiles.Num());
@@ -287,4 +288,10 @@ void AMaumDayManager::LoadGame()
 
 	UE_LOG(LogTemp, Log, TEXT("게임 로드 완료 (%d일차, 작물 %d개, 점수 %d)"),
 		CurrentDay, LoadObj->Crops.Num(), TotalScore);
+}
+
+void AMaumDayManager::HandleHarvestImminent(const FString& Message)
+{
+	UE_LOG(LogTemp, Log, TEXT("수확 임박: %s"), *Message);
+	OnHarvestMessage.Broadcast(Message);   // UI로 전달
 }

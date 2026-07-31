@@ -28,17 +28,7 @@ void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActo
 
 void AMaumTile::InteractWithTile()
 {
-	// 다 자란 작물이 있으면 모드와 무관하게 수확 우선
-	if (PlantedCrop && PlantedCrop->IsHarvestable())
-	{
-		const int32 Score = PlantedCrop->HarvestCrop();
-		OnCropHarvested.Broadcast(Score);
-		PlantedCrop->Destroy();
-		PlantedCrop = nullptr;
-		return;
-	}
-
-	// 그 외엔 기존 모드별 동작
+	// 수확은 자동으로 처리되므로, 타일 터치는 심기·물주기·비료만 담당
 	switch (InteractMode)
 	{
 	case EMaumInteractMode::Plant:
@@ -60,6 +50,7 @@ void AMaumTile::InteractWithTile()
 		break;
 	}
 }
+
 
 bool AMaumTile::PlantCrop(FName CropID, UDataTable* InDataTable)
 {
@@ -83,6 +74,8 @@ bool AMaumTile::PlantCrop(FName CropID, UDataTable* InDataTable)
 
 	// 작물이 스스로 수확되면 타일이 정리하도록 구독
 	NewCrop->OnHarvestedSelf.AddDynamic(this, &AMaumTile::HandleCropSelfHarvested);
+	// 작물의 수확 임박 자막을 위로 중계
+	NewCrop->OnHarvestImminent.AddDynamic(this, &AMaumTile::RelayHarvestImminent);
 
 	PlantedCrop = NewCrop;
 
@@ -144,4 +137,9 @@ void AMaumTile::HandleCropSelfHarvested(int32 Score)
 		PlantedCrop->Destroy();
 		PlantedCrop = nullptr;
 	}
+}
+
+void AMaumTile::RelayHarvestImminent(const FString& Message)
+{
+	OnTileHarvestImminent.Broadcast(Message);
 }

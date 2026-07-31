@@ -1,5 +1,4 @@
 ﻿#pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Engine/DataTable.h"
@@ -9,11 +8,13 @@
 // 작물 수확 완료 알림 (타일이 받아서 정리)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropHarvestedSelf, int32, Score);
 
+// 수확 임박 자막 표시 요청 (타일이 구독)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHarvestImminent, const FString&, Message);
+
 UCLASS()
 class MAUMSEED_API AMaumCrop : public AActor
 {
 	GENERATED_BODY()
-
 public:
 	AMaumCrop();
 
@@ -63,6 +64,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Save")
 	void GetSaveData(FName& OutCropID, int32& OutGrowth, int32& OutStage) const;
 
+	// 이 작물이 스스로 수확될 때 (타일이 구독)
+	UPROPERTY(BlueprintAssignable, Category = "Crop|Event")
+	FOnCropHarvestedSelf OnHarvestedSelf;
+
+	// 수확 임박 알림 (타일이 구독 → 자막 표시)
+	UPROPERTY(BlueprintAssignable, Category = "Crop|Event")
+	FOnHarvestImminent OnHarvestImminent;
+
 	// 작물 3D 모델
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> CropMesh;
@@ -79,10 +88,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Sound")
 	TObjectPtr<USoundBase> HarvestSound;
 
-	// 이 작물이 클릭되어 수확될 때 (타일이 구독)
-	UPROPERTY(BlueprintAssignable, Category = "Crop|Event")
-	FOnCropHarvestedSelf OnHarvestedSelf;
-
 protected:
 	virtual void BeginPlay() override;
 
@@ -91,6 +96,10 @@ protected:
 
 	// 현재 단계에 맞는 메시로 교체
 	void UpdateStageMesh();
+
+	// 타이머 만료 시 자동 수확
+	UFUNCTION()
+	void AutoHarvest();
 
 	// 데이터테이블 참조
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
@@ -123,11 +132,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	bool bFertilizedToday = false;
 
-	UFUNCTION()
-	void OnCropClicked(AActor* TouchedActor, FKey ButtonPressed);
-
-	UFUNCTION()
-	void OnCropTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor);
-
-	void TryHarvestByClick();
+private:
+	// 자동 수확 타이머
+	FTimerHandle AutoHarvestTimer;
 };
