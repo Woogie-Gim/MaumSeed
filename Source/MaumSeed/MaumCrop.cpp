@@ -1,10 +1,11 @@
 ﻿#include "MaumCrop.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Components/WidgetComponent.h"
 
 AMaumCrop::AMaumCrop()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
 	CropMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CropMesh"));
 	RootComponent = CropMesh;
@@ -13,16 +14,51 @@ AMaumCrop::AMaumCrop()
 	CropMesh->SetSimulatePhysics(false);
 	CropMesh->SetEnableGravity(false);
 	CropMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	StageWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("StageWidget"));
+	StageWidget->SetupAttachment(RootComponent);
+	StageWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	StageWidget->SetRelativeLocation(FVector(0.f, 0.f, 90.f));   // 작물 위 90 유닛
+	StageWidget->SetDrawSize(FVector2D(150.f, 60.f));
 }
 
 void AMaumCrop::BeginPlay()
 {
 	Super::BeginPlay();
 
+	SetActorTickEnabled(false);   // 평소엔 Tick 꺼둠 (페이드 때만 켬)
+
 	// 에디터에서 미리 배치한 경우 대비
 	if (!bCropDataValid && CropDataTable && !CurrentCropID.IsNone())
 	{
 		InitCrop(CurrentCropID, CropDataTable);
+	}
+}
+
+void AMaumCrop::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (!bIsFadingOut) return;
+
+	FadeElapsed += DeltaTime;
+	const float Alpha = FMath::Clamp(FadeElapsed / FadeOutDuration, 0.0f, 1.0f);
+
+	// 1.0 → 0.0으로 스케일 축소
+	const float NewScale = FMath::Lerp(1.0f, 0.0f, Alpha);
+	SetActorScale3D(FVector(NewScale));
+
+	// 다 줄어들면 메시 정리 + Tick 끄기
+	if (Alpha >= 1.0f)
+	{
+		bIsFadingOut = false;
+		SetActorTickEnabled(false);
+
+		if (CropMesh)
+		{
+			CropMesh->SetStaticMesh(nullptr);
+		}
+		SetActorScale3D(FVector(1.0f));   // 스케일 원복 (다음 작물 위해)
 	}
 }
 
@@ -217,10 +253,10 @@ int32 AMaumCrop::HarvestCrop()
 	WateredToday = 0;
 	bFertilizedToday = false;
 
-	if (CropMesh)
-	{
-		CropMesh->SetStaticMesh(nullptr);
-	}
+	// 메시를 바로 없애지 않고 페이드아웃 시작
+	bIsFadingOut = true;
+	FadeElapsed = 0.0f;
+	SetActorTickEnabled(true);   // 페이드 동안만 Tick 켜기
 
 	return FinalScore;
 }

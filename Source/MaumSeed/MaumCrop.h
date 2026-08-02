@@ -5,6 +5,8 @@
 #include "MaumCropData.h"
 #include "MaumCrop.generated.h"
 
+class UWidgetComponent;
+
 // 작물 수확 완료 알림 (타일이 받아서 정리)
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropHarvestedSelf, int32, Score);
 
@@ -88,8 +90,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Sound")
 	TObjectPtr<USoundBase> HarvestSound;
 
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	int32 GetMaxStage() const { return bCropDataValid ? CachedCropData.GrowthDays : 0; }
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UWidgetComponent> StageWidget;
+
 protected:
 	virtual void BeginPlay() override;
+
+	virtual void Tick(float DeltaTime) override;
 
 	// 성장 단계 상승 처리
 	void AdvanceToNextStage();
@@ -131,6 +141,16 @@ protected:
 	// 오늘 비료 사용 여부
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CropData")
 	bool bFertilizedToday = false;
+
+	// 수확 페이드아웃 진행 중 여부
+	bool bIsFadingOut = false;
+
+	// 페이드 경과 시간
+	float FadeElapsed = 0.0f;
+
+	// 페이드 지속 시간
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crop|Visual")
+	float FadeOutDuration = 0.4f;
 
 private:
 	// 자동 수확 타이머

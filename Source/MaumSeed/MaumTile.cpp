@@ -123,6 +123,8 @@ void AMaumTile::RestoreCrop(FName CropID, int32 Growth, int32 Stage)
 
 	NewCrop->OnHarvestedSelf.AddDynamic(this, &AMaumTile::HandleCropSelfHarvested);
 
+	NewCrop->OnHarvestImminent.AddDynamic(this, &AMaumTile::RelayHarvestImminent);
+
 	PlantedCrop = NewCrop;
 }
 
@@ -131,11 +133,24 @@ void AMaumTile::HandleCropSelfHarvested(int32 Score)
 	// DayManager가 점수를 집계하도록 기존 수확 이벤트 브로드캐스트
 	OnCropHarvested.Broadcast(Score);
 
-	// 작물 정리
+	// 작물이 페이드아웃하는 동안 기다렸다가 정리
 	if (PlantedCrop)
 	{
-		PlantedCrop->Destroy();
+		// PlantedCrop 참조만 끊고, 작물은 스스로 페이드 후 남아있다 정리
+		AMaumCrop* Crop = PlantedCrop;
 		PlantedCrop = nullptr;
+
+		// 페이드(0.4초)보다 살짝 뒤에 파괴
+		FTimerHandle DestroyTimer;
+		FTimerDelegate DestroyDelegate;
+		DestroyDelegate.BindLambda([Crop]()
+			{
+				if (IsValid(Crop))
+				{
+					Crop->Destroy();
+				}
+			});
+		GetWorldTimerManager().SetTimer(DestroyTimer, DestroyDelegate, 0.5f, false);
 	}
 }
 
