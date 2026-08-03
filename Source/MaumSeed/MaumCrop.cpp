@@ -17,9 +17,10 @@ AMaumCrop::AMaumCrop()
 
 	StageWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("StageWidget"));
 	StageWidget->SetupAttachment(RootComponent);
-	StageWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	StageWidget->SetWidgetSpace(EWidgetSpace::World);
 	StageWidget->SetRelativeLocation(FVector(0.f, 0.f, 90.f));   // 작물 위 90 유닛
 	StageWidget->SetDrawSize(FVector2D(150.f, 60.f));
+	StageWidget->SetTickMode(ETickMode::Automatic);
 }
 
 void AMaumCrop::BeginPlay()
