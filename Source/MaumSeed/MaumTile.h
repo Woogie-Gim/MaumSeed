@@ -32,9 +32,17 @@ class MAUMSEED_API AMaumTile : public AActor
 public:
 	AMaumTile();
 
-	// 타일 상호작용 진입점
+	// 현재 도구(모드)로 이 타일에 작용 (PlayerController가 호출)
 	UFUNCTION(BlueprintCallable, Category = "Tile")
-	void InteractWithTile();
+	void ApplyTool(EMaumInteractMode Tool);
+
+	// 물주기 (타일이 심어진 작물에 위임)
+	UFUNCTION(BlueprintCallable, Category = "Tile")
+	void WaterPlantedCrop();
+
+	// 비료 (타일이 심어진 작물에 위임)
+	UFUNCTION(BlueprintCallable, Category = "Tile")
+	void FertilizePlantedCrop();
 
 	// 작물 심기
 	UFUNCTION(BlueprintCallable, Category = "Tile")
@@ -49,10 +57,6 @@ public:
 	// 타일 인덱스 (세이브/로드 식별용)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
 	int32 TileIndex = 0;
-
-	// 현재 상호작용 모드 (UI에서 변경)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
-	EMaumInteractMode InteractMode = EMaumInteractMode::Water;
 
 	// 심을 작물 ID (UI에서 선택)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
@@ -81,9 +85,6 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	UFUNCTION()
-	void OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor);
-
 	// 터치 피드백 애니메이션
 	void PlayTouchFeedback();
 
@@ -103,6 +104,12 @@ protected:
 	// 작물의 수확 임박 자막을 위로 중계
 	UFUNCTION()
 	void RelayHarvestImminent(const FString& Message);
+
+	UFUNCTION()
+	void OnTileClicked(AActor* TouchedActor, FKey ButtonPressed);
+
+	UFUNCTION()
+	void OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor);
 
 private:
 	FTimerHandle ScaleRestoreTimer;

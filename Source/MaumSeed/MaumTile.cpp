@@ -2,6 +2,7 @@
 #include "MaumCrop.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "MaumPlayerController.h"
 
 AMaumTile::AMaumTile()
 {
@@ -17,40 +18,71 @@ void AMaumTile::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 액터 네이티브 클릭 이벤트 구독
+	OnClicked.AddDynamic(this, &AMaumTile::OnTileClicked);
 	OnInputTouchBegin.AddDynamic(this, &AMaumTile::OnTileTouched);
 }
 
-void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor)
+void AMaumTile::ApplyTool(EMaumInteractMode Tool)
 {
-	PlayTouchFeedback();
-	InteractWithTile();
-}
+	PlayTouchFeedback();   // 어떤 도구든 눌린 피드백은 공통
 
-void AMaumTile::InteractWithTile()
-{
-	// 수확은 자동으로 처리되므로, 타일 터치는 심기·물주기·비료만 담당
-	switch (InteractMode)
+	switch (Tool)
 	{
 	case EMaumInteractMode::Plant:
 		if (IsEmpty())
 			PlantCrop(SelectedCropID, CropDataTable);
 		break;
-
 	case EMaumInteractMode::Water:
-		if (PlantedCrop)
-			PlantedCrop->WaterCrop();
+		WaterPlantedCrop();
 		break;
-
 	case EMaumInteractMode::Fertilize:
-		if (PlantedCrop)
-			PlantedCrop->ApplyFertilizer();
+		FertilizePlantedCrop();
 		break;
-
 	default:
 		break;
 	}
 }
 
+void AMaumTile::WaterPlantedCrop()
+{
+	if (PlantedCrop)
+		PlantedCrop->WaterCrop();
+}
+
+void AMaumTile::FertilizePlantedCrop()
+{
+	if (PlantedCrop)
+		PlantedCrop->ApplyFertilizer();
+}
+
+void AMaumTile::OnTileClicked(AActor* TouchedActor, FKey ButtonPressed)
+{
+	UE_LOG(LogTemp, Warning, TEXT("타일 클릭됨!"));
+
+	// PlayerController의 현재 도구를 조회해서 적용
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (AMaumPlayerController* MaumPC = Cast<AMaumPlayerController>(PC))
+		{
+			ApplyTool(MaumPC->CurrentTool);
+		}
+	}
+}
+
+// 터치 핸들러 추가 (클릭 핸들러와 같은 동작)
+void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActor)
+{
+	UE_LOG(LogTemp, Warning, TEXT("타일 터치됨!"));
+
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (AMaumPlayerController* MaumPC = Cast<AMaumPlayerController>(PC))
+		{
+			ApplyTool(MaumPC->CurrentTool);
+		}
+	}
+}
 
 bool AMaumTile::PlantCrop(FName CropID, UDataTable* InDataTable)
 {
