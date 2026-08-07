@@ -16,6 +16,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Interact")
 	EMaumInteractMode CurrentTool = EMaumInteractMode::Plant;
 
+	// 현재 선택된 작물 (드롭다운이 변경)
+	UPROPERTY(BlueprintReadWrite, Category = "Interact")
+	FName CurrentCropID = TEXT("C01");
+
+	// UI 드롭다운에서 호출: 심을 작물 변경
+	UFUNCTION(BlueprintCallable, Category = "Interact")
+	void SetCropID(FName NewCropID);
+
 	// UI 버튼에서 호출: 도구 변경 + 커서 아이콘 갱신
 	UFUNCTION(BlueprintCallable, Category = "Interact")
 	void SetTool(EMaumInteractMode NewTool);

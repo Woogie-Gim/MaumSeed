@@ -50,7 +50,7 @@ void AMaumPlayerController::OnClickPressed()
 
 		if (AMaumTile* Tile = Cast<AMaumTile>(Hit.GetActor()))
 		{
-			Tile->ApplyTool(CurrentTool);
+			Tile->ApplyTool(CurrentTool, CurrentCropID);   // CropID 같이 전달
 		}
 	}
 }
@@ -59,4 +59,9 @@ void AMaumPlayerController::SetTool(EMaumInteractMode NewTool)
 {
 	CurrentTool = NewTool;
 	UpdateCursorIcon(NewTool);
+}
+
+void AMaumPlayerController::SetCropID(FName NewCropID)
+{
+	CurrentCropID = NewCropID;
 }

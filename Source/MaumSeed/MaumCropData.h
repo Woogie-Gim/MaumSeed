@@ -4,6 +4,8 @@
 #include "Engine/DataTable.h"
 #include "MaumCropData.generated.h"
 
+class UStaticMesh;
+
 // 날씨 상태 정의
 UENUM(BlueprintType)
 enum class EMaumWeather : uint8
@@ -47,4 +49,8 @@ struct FMaumCropData : public FTableRowBase
 	// 수확 시 기본 획득 점수
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
 	int32 BaseScore = 10;
+
+	// 성장 단계별 메시 (씨앗/새싹/성장/개화) — 데이터테이블 행마다 지정
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CropData")
+	TArray<TObjectPtr<UStaticMesh>> StageMeshes;
 };

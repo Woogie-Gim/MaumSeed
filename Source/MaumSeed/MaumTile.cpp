@@ -23,15 +23,15 @@ void AMaumTile::BeginPlay()
 	OnInputTouchBegin.AddDynamic(this, &AMaumTile::OnTileTouched);
 }
 
-void AMaumTile::ApplyTool(EMaumInteractMode Tool)
+void AMaumTile::ApplyTool(EMaumInteractMode Tool, FName CropID)
 {
-	PlayTouchFeedback();   // 어떤 도구든 눌린 피드백은 공통
+	PlayTouchFeedback();
 
 	switch (Tool)
 	{
 	case EMaumInteractMode::Plant:
 		if (IsEmpty())
-			PlantCrop(SelectedCropID, CropDataTable);
+			PlantCrop(CropID, CropDataTable);
 		break;
 	case EMaumInteractMode::Water:
 		WaterPlantedCrop();
@@ -65,7 +65,7 @@ void AMaumTile::OnTileClicked(AActor* TouchedActor, FKey ButtonPressed)
 	{
 		if (AMaumPlayerController* MaumPC = Cast<AMaumPlayerController>(PC))
 		{
-			ApplyTool(MaumPC->CurrentTool);
+			ApplyTool(MaumPC->CurrentTool, MaumPC->CurrentCropID);
 		}
 	}
 }
@@ -79,7 +79,7 @@ void AMaumTile::OnTileTouched(ETouchIndex::Type FingerIndex, AActor* TouchedActo
 	{
 		if (AMaumPlayerController* MaumPC = Cast<AMaumPlayerController>(PC))
 		{
-			ApplyTool(MaumPC->CurrentTool);
+			ApplyTool(MaumPC->CurrentTool, MaumPC->CurrentCropID);
 		}
 	}
 }

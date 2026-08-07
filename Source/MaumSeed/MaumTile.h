@@ -34,7 +34,7 @@ public:
 
 	// 현재 도구(모드)로 이 타일에 작용 (PlayerController가 호출)
 	UFUNCTION(BlueprintCallable, Category = "Tile")
-	void ApplyTool(EMaumInteractMode Tool);
+	void ApplyTool(EMaumInteractMode Tool, FName CropID);
 
 	// 물주기 (타일이 심어진 작물에 위임)
 	UFUNCTION(BlueprintCallable, Category = "Tile")

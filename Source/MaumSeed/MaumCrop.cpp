@@ -202,12 +202,18 @@ void AMaumCrop::AdvanceToNextStage()
 
 void AMaumCrop::UpdateStageMesh()
 {
-	if (StageMeshes.Num() == 0 || !CropMesh) return;
+	if (!CropMesh) return;
 
-	const int32 MeshIndex = FMath::Clamp(CurrentStage, 0, StageMeshes.Num() - 1);
-	if (StageMeshes[MeshIndex])
+	// 데이터테이블에서 온 메시를 우선 사용, 없으면 기존 BP 배열로 폴백
+	const TArray<TObjectPtr<UStaticMesh>>& Meshes =
+		(CachedCropData.StageMeshes.Num() > 0) ? CachedCropData.StageMeshes : StageMeshes;
+
+	if (Meshes.Num() == 0) return;
+
+	const int32 MeshIndex = FMath::Clamp(CurrentStage, 0, Meshes.Num() - 1);
+	if (Meshes[MeshIndex])
 	{
-		CropMesh->SetStaticMesh(StageMeshes[MeshIndex]);
+		CropMesh->SetStaticMesh(Meshes[MeshIndex]);
 		CropMesh->MarkRenderStateDirty();
 	}
 }
