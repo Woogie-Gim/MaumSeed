@@ -5,6 +5,7 @@
 #include "MaumCropData.generated.h"
 
 class UStaticMesh;
+class UTexture2D;   // 작물 아이콘용
 
 // 날씨 상태 정의
 UENUM(BlueprintType)
